@@ -133,77 +133,68 @@ Fixpoint lookup
       end
     end.
 
-Fixpoint has_type
-  (g : context)
-  (t : term)
-  (A : type)
-  {struct t}
-  : Prop :=
-    match t with
-    | var_term v => assoc var type g v A
-    | abs_term v abst =>
-        match A with
-        | fun_type B C => assoc var type g v B /\ has_type g abst C
-        | _ => False
-        end
-    | app_term ft appt =>
-        exists B : type,
-          has_type g appt B /\ has_type g ft (fun_type B A)
-    end.
+Inductive has_type (g : context) : term -> type -> Prop :=
+| var_has_type : forall v : var, forall A : type,
+  assoc var type g v A -> has_type g (var_term v) A
+| abs_has_type : forall v : var, forall M : term, forall A B : type,
+  has_type ((v, A) :: g) M B -> has_type g (abs_term v M) (fun_type A B)
+| app_has_type : forall M N : term, forall A B : type,
+  has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B
+.
 
-Definition type_lookup
-  (g : context)
-  (v : var)
-  : option {A : type | has_type g (var_term v) A} :=
-    lookup var type var_dec g v.
+Definition assoc_translate (g : context) (v : var) (Asig : {A : type | assoc var type g v A})
+ : {A : type | has_type g (var_term v) A} :=
+ let (A, HA) := Asig in
+   exist (fun A : type => has_type g (var_term v) A) A (var_has_type g v A HA).
 
-Definition make_fun
-  (g : context)
-  (v : var)
-  (Aopt : option {A : type | has_type g (var_term v) A})
-  (r : term)
-  (Bopt : option {B : type | has_type g r B})
-  : option {C : type | has_type g (abs_term v r) C} :=
-    match (Aopt, Bopt) with
-    | (Some (exist A HA), Some (exist B HB)) => Some (
-        exist
-          (fun C : type => has_type g (abs_term v r) C)
-          (fun_type A B)
-          (conj HA HB)
-      )
-    | _ => None
-  end.
+Definition make_var_type (g : context) (v : var)
+ : option {A : type | has_type g (var_term v) A} :=
+ option_map (assoc_translate g v) (lookup var type var_dec g v).
+
+Definition make_abs_type (g : context) (v : var) (F : term)
+ (A : type)
+ (HA : has_type g (var_term v) A)
+ (Bopt : option {B : type | has_type ((v, A) :: g) F B})
+ : option {C : type | has_type g (abs_term v F) C} :=
+ match Bopt with
+ | Some (exist B HB) => Some (exist
+     (fun C : type => has_type g (abs_term v F) C)
+     (fun_type A B)
+     (abs_has_type g v F A B HB)
+   )
+ | _ => None
+ end.
 
 Fixpoint type_check
   (g : context)
-  (t : term)
-  {struct t}
-  : option {A : type | has_type g t A}.
+  (T : term)
+  {struct T}
+  : option {A : type | has_type g T A}.
 Proof.
 refine
- match t as t0 return option {A : type | has_type g t0 A} with
- | var_term v => type_lookup g v
- | abs_term v ft => make_fun g v (type_lookup g v) ft (type_check g ft)
+ match T as T0 return option {A : type | has_type g T0 A} with
+ | var_term v => make_var_type g v
+ | abs_term v M =>
+   match make_var_type g v with
+   | Some (exist A HA) => make_abs_type g v M A HA (type_check ((v, A) :: g) M)
+   | None => None
+   end
  | app_term M N => 
    match (type_check g M, type_check g N) with
-   | (Some (exist C HC as Msig), Some (exist B HB as Nsig)) =>
-     match C as C0 return has_type g M C0 -> option {A : type | has_type g (app_term M N) A} with
-     | fun_type CB CA =>
-         (* force type of HCf via this subfunction *)
-         fun HCf : has_type g M (fun_type CB CA) =>
-           match type_dec CB B with
-           | left e => Some (exist
-               (fun A : type => has_type g (app_term M N) A)
-                 CA
-                 (ex_intro 
-                   (fun B0 : type => has_type g N B0 /\ has_type g M (fun_type B0 CA)) CB
-                   (conj (eq_ind_r (has_type g N) HB e) HCf)
-                 )
-               )
-           | right _ => None
-           end
-     | var_type _ => fun _ => None
+   | (Some (exist C HC as Msig), Some (exist A HA as Nsig)) =>
+     match C as C0 return (has_type g M C0 -> option {C : type | has_type g (app_term M N) C}) with
+     | var_type v => fun _ => None
+     | fun_type CA CB => fun HCf : has_type g M (fun_type CA CB) =>
+       match type_dec CA A with
+       | left eq => Some (exist
+           (fun C0 : type => has_type g (app_term M N) C0)
+           CB
+           (app_has_type g M N CA CB HCf (eq_ind_r (has_type g N) HA eq))
+         )
+       | right _ => None
+       end
      end HC
    | _ => None
   end
  end.
+Defined.
