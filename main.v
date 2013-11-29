@@ -35,7 +35,7 @@ Inductive term : Set :=
 Definition context := list (var * type).
 
 Definition assoc
-  (A B : Set)
+  {A B : Set}
   (l : list (A * B)) 
   (a : A)
   (b : B)
@@ -48,8 +48,8 @@ Definition sig_assoc_cons
   (y : B)
   (ls : list (A * B))
   (a : A)
-  (bSig : {b : B | assoc A B ls a b})
-  : {b : B | assoc A B ((x, y) :: ls) a b}.
+  (bSig : {b : B | assoc ls a b})
+  : {b : B | assoc ((x, y) :: ls) a b}.
 Proof.
 destruct bSig as (b, Hb).
 exists b.
@@ -64,29 +64,29 @@ Fixpoint lookup
   (l : list (A * B))
   (a : A)
   {struct l}
-  : option {b : B | assoc A B l a b} :=
-match l as l0 return option {b : B | assoc A B l0 a b} with
+  : option {b : B | assoc l a b} :=
+match l as l0 return option {b : B | assoc l0 a b} with
 | nil => None
 | (x, y) :: ls =>
   match P x a with
   | left eq => Some (exist
-    (fun b : B => assoc A B ((x, y) :: ls) a b)
+    (assoc ((x, y) :: ls) a)
     y
-    (eq_ind x (fun x0 : A => assoc A B ((x, y) :: ls) x0 y) (in_eq (x, y) ls) a eq))
+    (eq_ind x (fun x0 : A => assoc ((x, y) :: ls) x0 y) (in_eq (x, y) ls) a eq))
   | right _ => option_map (sig_assoc_cons x y ls a) (lookup P ls a)
   end
 end.
 
 Inductive has_type (g : context) : term -> type -> Prop :=
 | var_has_type : forall v : var, forall A : type,
-  assoc var type g v A -> has_type g (var_term v) A
+  assoc g v A -> has_type g (var_term v) A
 | abs_has_type : forall v : var, forall M : term, forall A B : type,
   has_type ((v, A) :: g) M B -> has_type g (abs_term v M) (fun_type A B)
 | app_has_type : forall M N : term, forall A B : type,
   has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B
 .
 
-Definition assoc_translate (g : context) (v : var) (Asig : {A : type | assoc var type g v A})
+Definition assoc_translate (g : context) (v : var) (Asig : {A : type | assoc g v A})
  : {A : type | has_type g (var_term v) A} :=
  let (A, HA) := Asig in
    exist (fun A : type => has_type g (var_term v) A) A (var_has_type g v A HA).
