@@ -42,84 +42,40 @@ Definition assoc
   : Prop :=
     In (a, b) l.
 
-Lemma lookup_found_as_first
-  (A B : Set)
-  (ls : list (A * B))
-  (a : A)
-  (b : B)
-  : assoc A B ((a, b) :: ls) a b.
-Proof.
-unfold assoc.
-unfold In.
-left.
-reflexivity.
-Qed.
-
-Lemma assocr_move
-  (A B : Set)
-  (ls : list (A * B))
-  (a x : A)
-  (y : B)
-  (e : {b : B | assoc A B ((a, y) :: ls) a b})
-  (p : a = x)
-  : {b : B | assoc A B ((x, y) :: ls) a b}.
-Proof.
-destruct e.
-exists x0.
-elim p.
-exact a0.
-Qed.
-
-Definition assoc_cons
-  (A B : Set)
+Definition sig_assoc_cons
+  {A B : Set}
   (x : A)
   (y : B)
   (ls : list (A * B))
   (a : A)
-  (b : B)
-  (p : assoc A B ls a b)
-  : assoc A B ((x, y) :: ls) a b. 
+  (bSig : {b : B | assoc A B ls a b})
+  : {b : B | assoc A B ((x, y) :: ls) a b}.
 Proof.
+destruct bSig as (b, Hb).
+exists b.
 unfold assoc.
 apply in_cons.
-exact p.
-Qed.
-
-Definition sig_assoc_cons
-  (A B : Set)
-  (x : A)
-  (y : B)
-  (ls : list (A * B))
-  (a : A)
-  (b : {b : B | assoc A B ls a b})
-  : {b : B | assoc A B ((x, y) :: ls) a b}.
-Proof.
-destruct b.
-exists x0.
-apply assoc_cons.
-exact a0.
+exact Hb.
 Qed.
 
 Fixpoint lookup
-  (A B : Set)
+  {A B : Set}
   (P : forall x y : A, {x = y} + {x <> y})
   (l : list (A * B))
   (a : A)
   {struct l}
   : option {b : B | assoc A B l a b} :=
-    match l return option {b : B | assoc A B l a b} with
-    | nil => None
-    | (x, y) :: ls => match P a x with
-        left p => Some (assocr_move A B ls a x y (
-            @exist
-              B
-              (fun q => assoc A B ((a, y) :: ls) a q)
-              y
-              (lookup_found_as_first A B ls a y)
-          ) p)
-      | right _ => option_map (sig_assoc_cons A B x y ls a) (lookup A B P ls a)
-      end
-    end.
+match l as l0 return option {b : B | assoc A B l0 a b} with
+| nil => None
+| (x, y) :: ls =>
+  match P x a with
+  | left eq => Some (exist
+    (fun b : B => assoc A B ((x, y) :: ls) a b)
+    y
+    (eq_ind x (fun x0 : A => assoc A B ((x, y) :: ls) x0 y) (in_eq (x, y) ls) a eq))
+  | right _ => option_map (sig_assoc_cons x y ls a) (lookup P ls a)
+  end
+end.
 
 Inductive has_type (g : context) : term -> type -> Prop :=
 | var_has_type : forall v : var, forall A : type,
@@ -137,7 +93,7 @@ Definition assoc_translate (g : context) (v : var) (Asig : {A : type | assoc var
 
 Definition make_var_type (g : context) (v : var)
  : option {A : type | has_type g (var_term v) A} :=
- option_map (assoc_translate g v) (lookup var type var_dec g v).
+ option_map (assoc_translate g v) (lookup var_dec g v).
 
 Definition make_abs_type (g : context) (v : var) (F : term)
  (A : type)
