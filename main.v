@@ -25,7 +25,7 @@ Defined.
 
 Inductive term : Set :=
 | var_term : var -> term
-| abs_term : var -> term -> term
+| abs_term : (var * type) -> term -> term
 | app_term : term -> term -> term
 .
 
@@ -71,7 +71,7 @@ Inductive has_type (g : context) : term -> type -> Prop :=
 | var_has_type : forall v : var, forall A : type,
   assoc g v A -> has_type g (var_term v) A
 | abs_has_type : forall v : var, forall M : term, forall A B : type,
-  has_type ((v, A) :: g) M B -> has_type g (abs_term v M) (fun_type A B)
+  has_type ((v, A) :: g) M B -> has_type g (abs_term (v, A) M) (fun_type A B)
 | app_has_type : forall M N : term, forall A B : type,
   has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B
 .
@@ -81,31 +81,17 @@ Definition assoc_translate (g : context) (v : var) (Asig : {A : type | assoc g v
  let (A, HA) := Asig in
    exist (fun A : type => has_type g (var_term v) A) A (var_has_type g v A HA).
 
-Definition make_var_type (g : context) (v : var)
- : option {A : type | has_type g (var_term v) A} :=
- option_map (assoc_translate g v) (lookup var_dec g v).
-
-Definition make_abs_type (g : context) (v : var) (F : term)
- (A : type) (HA : has_type g (var_term v) A)
- (Bopt : option {B : type | has_type ((v, A) :: g) F B})
- : option {C : type | has_type g (abs_term v F) C} :=
- match Bopt with
- | Some (exist B HB) => Some (exist
-     (fun C : type => has_type g (abs_term v F) C)
-     (fun_type A B)
-     (abs_has_type g v F A B HB)
-   )
- | _ => None
- end.
-
 Fixpoint type_check (g : context) (T : term) {struct T}
  : option {A : type | has_type g T A} :=
  match T as T0 return option {A : type | has_type g T0 A} with
- | var_term v => make_var_type g v
- | abs_term v M =>
-   match make_var_type g v with
-   | Some (exist A HA) => make_abs_type g v M A HA (type_check ((v, A) :: g) M)
-   | None => None
+ | var_term v => option_map (assoc_translate g v) (lookup var_dec g v)
+ | abs_term (v, A) M => match type_check ((v, A) :: g) M with
+   | Some (exist B HB) => Some (exist
+       (fun C : type => has_type g (abs_term (v, A) M) C)
+       (fun_type A B)
+       (abs_has_type g v M A B HB)
+     )
+   | _ => None
    end
  | app_term M N => 
    match (type_check g M, type_check g N) with
@@ -125,3 +111,7 @@ Fixpoint type_check (g : context) (T : term) {struct T}
    | _ => None
   end
  end.
+
+Definition gamma := cons ("x", var_type "a") (cons ("n", var_type "Nat") nil).
+
+Compute type_check gamma (app_term (abs_term ("x", var_type "A") (var_term "n")) (var_term "n")).
