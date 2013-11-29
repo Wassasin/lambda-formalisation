@@ -55,18 +55,6 @@ left.
 reflexivity.
 Qed.
 
-Lemma it_is
-  (A B : Set)
-  (l : list (A * B))
-  (a : A)
-  (b : B)
-  (p : assoc A B l a b)
-  : {b : B | assoc A B l a b}.
-Proof.
-exists b.
-exact p.
-Qed.
-
 Lemma assocr_move
   (A B : Set)
   (ls : list (A * B))
@@ -165,13 +153,8 @@ Definition make_abs_type (g : context) (v : var) (F : term)
  | _ => None
  end.
 
-Fixpoint type_check
-  (g : context)
-  (T : term)
-  {struct T}
-  : option {A : type | has_type g T A}.
-Proof.
-refine
+Fixpoint type_check (g : context) (T : term) {struct T}
+ : option {A : type | has_type g T A} :=
  match T as T0 return option {A : type | has_type g T0 A} with
  | var_term v => make_var_type g v
  | abs_term v M =>
@@ -197,4 +180,3 @@ refine
    | _ => None
   end
  end.
-Defined.
