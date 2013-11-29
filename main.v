@@ -2,11 +2,8 @@ Require Import String.
 Open Local Scope string_scope.
 
 Require Import Lists.List.
-Require Import Strings.String.
-Require Import Structures.Equalities.
 
-Definition option_dec
-  (A : Type)
+Definition option_dec {A : Type}
   (P : forall x y : A, {x = y} + {x <> y})
   (x y : option A)
   : {x = y} + {x <> y}.
@@ -34,21 +31,16 @@ Inductive term : Set :=
 
 Definition context := list (var * type).
 
-Definition assoc
-  {A B : Set}
+Definition assoc {A B : Set}
   (l : list (A * B)) 
   (a : A)
   (b : B)
   : Prop :=
     In (a, b) l.
 
-Definition sig_assoc_cons
-  {A B : Set}
-  (x : A)
-  (y : B)
-  (ls : list (A * B))
-  (a : A)
-  (bSig : {b : B | assoc ls a b})
+Definition sig_assoc_cons {A B : Set}
+  (x : A) (y : B)
+  (ls : list (A * B)) (a : A) (bSig : {b : B | assoc ls a b})
   : {b : B | assoc ((x, y) :: ls) a b}.
 Proof.
 destruct bSig as (b, Hb).
@@ -58,11 +50,9 @@ apply in_cons.
 exact Hb.
 Qed.
 
-Fixpoint lookup
-  {A B : Set}
+Fixpoint lookup {A B : Set}
   (P : forall x y : A, {x = y} + {x <> y})
-  (l : list (A * B))
-  (a : A)
+  (l : list (A * B)) (a : A)
   {struct l}
   : option {b : B | assoc l a b} :=
 match l as l0 return option {b : B | assoc l0 a b} with
@@ -96,8 +86,7 @@ Definition make_var_type (g : context) (v : var)
  option_map (assoc_translate g v) (lookup var_dec g v).
 
 Definition make_abs_type (g : context) (v : var) (F : term)
- (A : type)
- (HA : has_type g (var_term v) A)
+ (A : type) (HA : has_type g (var_term v) A)
  (Bopt : option {B : type | has_type ((v, A) :: g) F B})
  : option {C : type | has_type g (abs_term v F) C} :=
  match Bopt with
