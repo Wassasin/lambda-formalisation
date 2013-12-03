@@ -1,7 +1,7 @@
 Require Import String.
 Open Local Scope string_scope.
 
-Require Import FSets.FMapInterface.
+Require Import List.
 
 Definition option_dec {A : Type}
   (P : forall x y : A, {x = y} + {x <> y})
@@ -52,7 +52,7 @@ match l with
   end
 end.
 
-Definition sig_assoc_cons {A B : Set}
+Lemma sig_assoc_cons {A B : Set}
   {A_dec : forall x y : A, {x = y} + {x <> y}}
   {B_dec : forall x y : B, {x = y} + {x <> y}}
   (x : A) (y : B)
@@ -71,7 +71,7 @@ exact e.
 exact Hb.
 Qed.
 
-Definition neg_assoc_cons {A B : Set} {a : A} {b : B}
+Lemma neg_assoc_cons {A B : Set} {a : A} {b : B}
   {A_dec : forall x y : A, {x = y} + {x <> y}}
   {B_dec : forall x y : B, {x = y} + {x <> y}}
   (x : A) (y : B)
@@ -91,7 +91,7 @@ elim p.
 exact H.
 Qed.
 
-Definition assoc_nil {A B : Set} {a : A} {b : B}
+Lemma assoc_nil {A B : Set} {a : A} {b : B}
   {A_dec : forall x y : A, {x = y} + {x <> y}}
   {B_dec : forall x y : B, {x = y} + {x <> y}}
 : ~assoc A_dec B_dec nil a b.
@@ -101,7 +101,7 @@ intro.
 contradiction.
 Qed.
 
-Definition assoc_B_unique {A B : Set} {l : list (A * B)} {a : A} {b1 b2 : B}
+Lemma assoc_B_unique {A B : Set} {l : list (A * B)} {a : A} {b1 b2 : B}
   {A_dec : forall x y : A, {x = y} + {x <> y}}
   {B_dec : forall x y : B, {x = y} + {x <> y}}
   (P1 : assoc A_dec B_dec l a b1)
@@ -132,7 +132,7 @@ contradiction.
 apply IHl.
 exact P1.
 exact P2.
-Defined.
+Qed.
 
 Fixpoint lookup {A B : Set}
   (A_dec : forall x y : A, {x = y} + {x <> y})
@@ -169,7 +169,7 @@ reflexivity.
 elim n.
 exact eq.
 
-Defined.
+Qed.
 
 Inductive has_type (g : context) : term -> type -> Prop :=
 | var_has_type : forall v : var, forall A : type,
@@ -327,7 +327,7 @@ destruct H0.
 destruct H.
 destruct (n (fun_type x A)).
 exact H.
-
+Show Proof.
 Defined.
 
 Definition gamma := cons ("x", var_type "a") (cons ("n", var_type "Nat") nil).
