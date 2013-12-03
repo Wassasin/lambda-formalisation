@@ -69,27 +69,27 @@ destruct (A_dec x a).
 elim neq.
 exact e.
 exact Hb.
-Qed.
+Defined.
 
 Lemma neg_assoc_cons {A B : Set} {a : A} {b : B}
   {A_dec : forall x y : A, {x = y} + {x <> y}}
   {B_dec : forall x y : B, {x = y} + {x <> y}}
   (x : A) (y : B)
   (ls : list (A * B))
-  (p : ~assoc A_dec B_dec ls a b)
+  (np : ~assoc A_dec B_dec ls a b)
   (neq : x <> a)
   : ~assoc A_dec B_dec ((x, y) :: ls) a b.
 Proof.
-intro.
-unfold assoc in p.
-unfold assoc in H.
-destruct (A_dec x a).
+intro q.
+unfold assoc in np.
+unfold assoc in q.
+destruct (A_dec x a) as [eq | ?].
 elim neq.
-exact e.
+exact eq.
 
-elim p.
-exact H.
-Qed.
+elim np.
+exact q.
+Defined.
 
 Lemma assoc_nil {A B : Set} {a : A} {b : B}
   {A_dec : forall x y : A, {x = y} + {x <> y}}
@@ -99,7 +99,7 @@ Proof.
 unfold assoc.
 intro.
 contradiction.
-Qed.
+Defined.
 
 Lemma assoc_B_unique {A B : Set} {l : list (A * B)} {a : A} {b1 b2 : B}
   {A_dec : forall x y : A, {x = y} + {x <> y}}
@@ -132,7 +132,7 @@ contradiction.
 apply IHl.
 exact P1.
 exact P2.
-Qed.
+Defined.
 
 Fixpoint lookup {A B : Set}
   (A_dec : forall x y : A, {x = y} + {x <> y})
@@ -168,73 +168,84 @@ elim n.
 reflexivity.
 elim n.
 exact eq.
-
-Qed.
+Defined.
 
 Inductive has_type (g : context) : term -> type -> Prop :=
 | var_has_type : forall v : var, forall A : type,
   assoc var_dec type_dec g v A -> has_type g (var_term v) A
 | abs_has_type : forall v : var, forall M : term, forall A B : type,
   has_type ((v, A) :: g) M B -> has_type g (abs_term (v, A) M) (fun_type A B)
-| app_has_type : forall M N : term, forall B : type, (exists A : type,
-  has_type g M (fun_type A B) /\ has_type g N A) -> has_type g (app_term M N) B
+| app_has_type : forall M N : term, forall A B : type,
+  has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B
 .
 
-Fixpoint term_has_unique_type {g : context} {T : term} {A B : type}
+Fixpoint term_has_unique_type {g : context} {A B : type}
+  (T : term)
   (P : has_type g T A)
   (Q : has_type g T B)
+  {struct T}
   : A = B.
 Proof.
-destruct T.
+destruct T as [v | p M | M N].
 
-inversion_clear P.
-inversion_clear Q.
-rewrite (assoc_B_unique H H0).
+inversion_clear P as [? ? P' | ? | ?].
+inversion_clear Q as [? ? Q' | ? | ?].
+rewrite (assoc_B_unique P' Q').
 reflexivity.
 
 destruct p as (v, C).
-inversion_clear P.
-inversion_clear Q.
-rewrite (term_has_unique_type ((v, C) :: g) T B0 B1 H H0).
+inversion_clear P as [? | ? ? ? B0 P' | ?].
+inversion_clear Q as [? | ? ? ? B1 Q' | ?].
+rewrite (term_has_unique_type ((v, C) :: g) B0 B1 M P' Q').
 reflexivity.
 
-inversion_clear P.
-inversion_clear Q.
-
-destruct H.
-destruct H0.
-destruct H.
-destruct H0.
-rewrite (term_has_unique_type g T2 x x0 H1 H2) in H.
-assert (fun_type x0 A = fun_type x0 B).
-apply (term_has_unique_type g T1 (fun_type x0 A) (fun_type x0 B) H H0).
-inversion_clear H3.
+inversion_clear P as [? | ? | ? ? C0 ? PM PN].
+inversion_clear Q as [? | ? | ? ? C1 ? QM QN].
+assert (fun_type C0 A = fun_type C1 B) as eq.
+apply (term_has_unique_type g (fun_type C0 A) (fun_type C1 B) M PM QM).
+inversion_clear eq.
 reflexivity.
-Qed.
-
+Defined.
 
 Lemma type_inconsistency {g : context} {T : term} {A B : type} {v : var}
   (P : has_type g T (fun_type A B))
   (Q : has_type g T (var_type v))
   : False.
 Proof.
-
 elim (type_dec (fun_type A B) (var_type v)).
 
-intro.
-inversion a.
+intro eq.
+inversion eq.
 
-intro.
-elim b.
-apply (term_has_unique_type P Q).
-Qed.
+intro neq.
+elim neq.
+apply (term_has_unique_type T P Q).
+Defined.
+
+
+Lemma type_check_var_lookup_failure {g : context} {v : var} {A : type}
+  (NP : forall b : type, ~ assoc var_dec type_dec g v b)
+  (P : has_type g (var_term v) A)
+  : False.
+Proof.
+inversion_clear P as [? ? P' | ? | ?].
+apply (NP A).
+exact P'.
+Defined.
 
 Fixpoint type_check (g : context) (T : term) {struct T}
  : {A : type | has_type g T A} + {forall A : type, ~has_type g T A}.
-Proof.
 refine
  match T as T0 return {A : type | has_type g T0 A} + {forall A : type, ~has_type g T0 A} with
- | var_term v => _
+ | var_term v =>
+   match lookup var_dec type_dec g v with
+   | inleft (exist A P) => inleft
+     (forall A : type, ~ has_type g (var_term v) A)
+     (exist (fun A : type => has_type g (var_term v) A) A (var_has_type g v A P))
+   | inright NP => inright
+     {A : type | has_type g (var_term v) A}
+     (fun (A : type) (H : has_type g (var_term v) A) => type_check_var_lookup_failure NP H)
+   end
  | abs_term (v, A) M => _
  | app_term M N =>
    match (type_check g M, type_check g N) with
@@ -251,21 +262,10 @@ refine
    end
  end.
 
-destruct (lookup var_dec type_dec g v).
-apply inleft.
-destruct s.
-exists x.
-apply var_has_type.
-exact a.
-
-apply inright.
-intro.
-intro.
-inversion_clear H.
-apply (n A).
-exact H0.
-
 destruct (type_check ((v, A) :: g) M).
+
+Show Proof.
+
 apply inleft.
 destruct s as (B, HB).
 exists (fun_type A B).
@@ -283,17 +283,13 @@ apply inright.
 intro.
 intro.
 inversion_clear H.
-destruct H0.
-destruct H.
-apply (type_inconsistency H _H).
+apply (type_inconsistency H0 _H).
 
 apply inleft.
 exists CB.
-apply app_has_type.
-exists CA.
-split.
+apply (app_has_type g M N CA CB).
 exact HCf.
-rewrite <- eq in HA.
+rewrite eq.
 exact HA.
 
 apply inright.
@@ -301,35 +297,36 @@ intro CB0.
 intro.
 
 inversion_clear H.
-destruct H0.
-destruct H.
-rewrite (term_has_unique_type H0 HA) in H.
+rewrite (term_has_unique_type N H1 HA) in H0.
 elim n.
-assert (fun_type CA CB = fun_type A CB0).
-apply (term_has_unique_type HCf H).
-inversion_clear H1.
+assert (fun_type CA CB = fun_type A CB0) as eq.
+apply (term_has_unique_type M HCf H0).
+inversion_clear eq.
 reflexivity.
 
 apply inright.
 intro B.
 intro.
 inversion_clear H.
-destruct H0.
-destruct H.
-destruct (n x).
-exact H0.
+destruct (n A).
+exact H1.
 
 apply inright.
 intro.
 intro.
 inversion_clear H.
-destruct H0.
-destruct H.
-destruct (n (fun_type x A)).
-exact H.
-Show Proof.
+destruct (n (fun_type A0 A)).
+exact H0.
 Defined.
 
-Definition gamma := cons ("x", var_type "a") (cons ("n", var_type "Nat") nil).
+Definition type_check_simple (g : context) (T : term)
+ : option type :=
+ match type_check g T with
+ | inleft (exist x _) => Some x
+ | inright _ => None
+ end.
 
-Compute type_check gamma (app_term (abs_term ("x", var_type "A") (var_term "n")) (var_term "n")).
+Definition nat_type := var_type "Nat".
+Definition gamma := cons ("x", nat_type) (cons ("n", nat_type) nil).
+
+Compute type_check_simple gamma (app_term (abs_term ("x", nat_type) (var_term "n")) (var_term "n")).
