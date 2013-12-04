@@ -277,7 +277,7 @@ Lemma type_check_app_failure_N {g : context} {M N : term}
 Proof.
 intro B.
 intro HMN.
-inversion_clear HMN as [? | ? | ? ? A ? HM' HN].
+inversion_clear HMN as [? | ? | ? ? A ? HM HN].
 destruct (NHN A).
 exact HN.
 Defined.
