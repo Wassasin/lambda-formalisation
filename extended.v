@@ -222,102 +222,137 @@ elim neq.
 apply (term_has_unique_type T P Q).
 Defined.
 
-
-Lemma type_check_var_lookup_failure {g : context} {v : var} {A : type}
-  (NP : forall b : type, ~ assoc var_dec type_dec g v b)
-  (P : has_type g (var_term v) A)
-  : False.
+Lemma type_check_var_lookup_failure {g : context} {v : var}
+  (NP : forall A : type, ~ assoc var_dec type_dec g v A)
+  : forall A : type, ~ has_type g (var_term v) A.
 Proof.
-inversion_clear P as [? ? P' | ? | ?].
+intro A.
+intro Q.
+inversion_clear Q as [? ? Q' | ? | ?].
 apply (NP A).
-exact P'.
+exact Q'.
+Defined.
+
+Lemma type_check_abs_failure {g : context} {M : term} {v : var} {A : type}
+  (NP : forall B : type, ~ has_type ((v, A) :: g) M B)
+  : forall B : type, ~ has_type g (abs_term (v, A) M) B.
+Proof.
+intro B.
+intro Q.
+inversion_clear Q as [? | ? ? ? C Q' | ?].
+apply (NP C).
+exact Q'.
+Defined.
+
+Lemma type_check_app_failure_var {g : context} {M N : term} {v : var}
+  (P : has_type g M (var_type v))
+  : forall B : type, ~ has_type g (app_term M N) B.
+Proof.
+intro B.
+intro Q.
+inversion_clear Q as [? | ? | ? ? A ? QM QN].
+apply (type_inconsistency QM P).
+Defined.
+
+Lemma type_check_app_failure_eq {g : context} {M N : term} {A CA CB : type}
+  (HN : has_type g N A)
+  (HM : has_type g M (fun_type CA CB))
+  (neq : CA <> A)
+  : forall B : type, ~ has_type g (app_term M N) B.
+Proof.
+intro B.
+intro HMN.
+inversion_clear HMN as [? | ? | ? ? A' ? HM' HN'].
+rewrite (term_has_unique_type N HN' HN) in HM'.
+elim neq.
+assert (fun_type CA CB = fun_type A B) as eq.
+apply (term_has_unique_type M HM HM').
+inversion_clear eq.
+reflexivity.
+Defined.
+
+Lemma type_check_app_failure_N {g : context} {M N : term}
+  (NHN : forall A : type, ~ has_type g N A)
+  : forall B : type, ~ has_type g (app_term M N) B.
+Proof.
+intro B.
+intro HMN.
+inversion_clear HMN as [? | ? | ? ? A ? HM' HN].
+destruct (NHN A).
+exact HN.
+Defined.
+
+Lemma type_check_app_failure_M {g : context} {M N : term}
+  (NHM : forall A : type, ~ has_type g M A)
+  : forall A : type, ~ has_type g (app_term M N) A.
+Proof.
+intro B.
+intro HMN.
+inversion_clear HMN as [? | ? | ? ? A ? HM HN].
+destruct (NHM (fun_type A B)).
+exact HM.
 Defined.
 
 Fixpoint type_check (g : context) (T : term) {struct T}
- : {A : type | has_type g T A} + {forall A : type, ~has_type g T A}.
-refine
+ : {A : type | has_type g T A} + {forall A : type, ~has_type g T A} :=
  match T as T0 return {A : type | has_type g T0 A} + {forall A : type, ~has_type g T0 A} with
  | var_term v =>
    match lookup var_dec type_dec g v with
    | inleft (exist A P) => inleft
      (forall A : type, ~ has_type g (var_term v) A)
-     (exist (fun A : type => has_type g (var_term v) A) A (var_has_type g v A P))
+     (exist 
+       (fun A : type => has_type g (var_term v) A)
+       A
+       (var_has_type g v A P))
    | inright NP => inright
      {A : type | has_type g (var_term v) A}
-     (fun (A : type) (H : has_type g (var_term v) A) => type_check_var_lookup_failure NP H)
+     (type_check_var_lookup_failure NP)
    end
- | abs_term (v, A) M => _
+ | abs_term (v, A) M =>
+   match type_check ((v, A) :: g) M with
+   | inleft (exist B HB) => inleft
+     (forall B : type, ~ has_type g (abs_term (v, A) M) B)
+     (exist
+       (fun B : type => has_type g (abs_term (v, A) M) B)
+       (fun_type A B)
+       (abs_has_type g v M A B HB))
+   | inright NP => inright
+     {B : type | has_type g (abs_term (v, A) M) B}
+     (type_check_abs_failure NP)
+   end
  | app_term M N =>
-   match (type_check g M, type_check g N) with
-   | (inleft (exist C HC as Msig), inleft (exist A HA as Nsig)) =>
-     match C as C0 return (has_type g M C0 -> {C : type | has_type g (app_term M N) C} + {forall C : type, ~has_type g (app_term M N) C}) with
-     | var_type v => fun _ => _
-     | fun_type CA CB => fun HCf : has_type g M (fun_type CA CB) =>
-       match type_dec CA A with
-       | left eq => _
-       | right _ => _
-       end
-     end HC
-   | _ => _
+   match type_check g M with
+   | inleft (exist C HM as Msig) =>
+     match type_check g N with
+     | inleft (exist A HN as Nsig) =>
+       match C as C0 return (has_type g M C0 -> {C : type | has_type g (app_term M N) C} + {forall C : type, ~has_type g (app_term M N) C}) with
+       | var_type v => fun HM : has_type g M (var_type v) => inright
+         {C0 : type | has_type g (app_term M N) C0}
+         (type_check_app_failure_var HM)
+       | fun_type CA CB => fun HM' : has_type g M (fun_type CA CB) =>
+         match type_dec CA A with
+         | left eq => inleft
+           (forall CB : type, ~ has_type g (app_term M N) CB)
+           (exist
+             (fun CB : type => has_type g (app_term M N) CB)
+             CB
+             (app_has_type g M N CA CB HM'
+               (eq_ind_r (fun CA : type => has_type g N CA) HN eq)
+             ))
+         | right neq => inright
+           {CB : type | has_type g (app_term M N) CB}
+           (type_check_app_failure_eq HN HM' neq)
+         end
+       end HM
+     | inright NHN => inright
+       {A : type | has_type g (app_term M N) A}
+       (type_check_app_failure_N NHN)
+     end
+   | inright NHM => inright
+     {A : type | has_type g (app_term M N) A}
+     (type_check_app_failure_M NHM)
    end
  end.
-
-destruct (type_check ((v, A) :: g) M).
-
-Show Proof.
-
-apply inleft.
-destruct s as (B, HB).
-exists (fun_type A B).
-apply (abs_has_type g v M A B).
-exact HB.
-
-apply inright.
-intro B.
-intro.
-inversion_clear H.
-apply (n B0).
-exact H0.
-
-apply inright.
-intro.
-intro.
-inversion_clear H.
-apply (type_inconsistency H0 _H).
-
-apply inleft.
-exists CB.
-apply (app_has_type g M N CA CB).
-exact HCf.
-rewrite eq.
-exact HA.
-
-apply inright.
-intro CB0.
-intro.
-
-inversion_clear H.
-rewrite (term_has_unique_type N H1 HA) in H0.
-elim n.
-assert (fun_type CA CB = fun_type A CB0) as eq.
-apply (term_has_unique_type M HCf H0).
-inversion_clear eq.
-reflexivity.
-
-apply inright.
-intro B.
-intro.
-inversion_clear H.
-destruct (n A).
-exact H1.
-
-apply inright.
-intro.
-intro.
-inversion_clear H.
-destruct (n (fun_type A0 A)).
-exact H0.
-Defined.
 
 Definition type_check_simple (g : context) (T : term)
  : option type :=
