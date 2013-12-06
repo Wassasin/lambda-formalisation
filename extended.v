@@ -298,27 +298,21 @@ Fixpoint type_check (g : context) (T : term) {struct T}
  match T as T0 return {A : type | has_type g T0 A} + {forall A : type, ~has_type g T0 A} with
  | var_term v =>
    match lookup var_dec type_dec g v with
-   | inleft (exist A P) => inleft
-     (forall A : type, ~ has_type g (var_term v) A)
+   | inleft (exist A P) => inleft _
      (exist 
        (fun A : type => has_type g (var_term v) A)
        A
        (var_has_type g v A P))
-   | inright NP => inright
-     {A : type | has_type g (var_term v) A}
-     (type_check_var_lookup_failure NP)
+   | inright NP => inright _ (type_check_var_lookup_failure NP)
    end
  | abs_term (v, A) M =>
    match type_check ((v, A) :: g) M with
-   | inleft (exist B HB) => inleft
-     (forall B : type, ~ has_type g (abs_term (v, A) M) B)
+   | inleft (exist B HB) => inleft _
      (exist
        (fun B : type => has_type g (abs_term (v, A) M) B)
        (fun_type A B)
        (abs_has_type g v M A B HB))
-   | inright NP => inright
-     {B : type | has_type g (abs_term (v, A) M) B}
-     (type_check_abs_failure NP)
+   | inright NP => inright _ (type_check_abs_failure NP)
    end
  | app_term M N =>
    match type_check g M with
@@ -326,31 +320,22 @@ Fixpoint type_check (g : context) (T : term) {struct T}
      match type_check g N with
      | inleft (exist A HN as Nsig) =>
        match C as C0 return (has_type g M C0 -> {C : type | has_type g (app_term M N) C} + {forall C : type, ~has_type g (app_term M N) C}) with
-       | var_type v => fun HM : has_type g M (var_type v) => inright
-         {C0 : type | has_type g (app_term M N) C0}
-         (type_check_app_failure_var HM)
+       | var_type v => fun HM : has_type g M (var_type v) => inright _ (type_check_app_failure_var HM)
        | fun_type CA CB => fun HM' : has_type g M (fun_type CA CB) =>
          match type_dec CA A with
-         | left eq => inleft
-           (forall CB : type, ~ has_type g (app_term M N) CB)
+         | left eq => inleft _
            (exist
              (fun CB : type => has_type g (app_term M N) CB)
              CB
              (app_has_type g M N CA CB HM'
                (eq_ind_r (fun CA : type => has_type g N CA) HN eq)
              ))
-         | right neq => inright
-           {CB : type | has_type g (app_term M N) CB}
-           (type_check_app_failure_eq HN HM' neq)
+         | right neq => inright _ (type_check_app_failure_eq HN HM' neq)
          end
        end HM
-     | inright NHN => inright
-       {A : type | has_type g (app_term M N) A}
-       (type_check_app_failure_N NHN)
+     | inright NHN => inright _ (type_check_app_failure_N NHN)
      end
-   | inright NHM => inright
-     {A : type | has_type g (app_term M N) A}
-     (type_check_app_failure_M NHM)
+   | inright NHM => inright _ (type_check_app_failure_M NHM)
    end
  end.
 
