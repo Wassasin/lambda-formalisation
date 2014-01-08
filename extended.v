@@ -146,7 +146,9 @@ match l as l0 return {b : B | assoc A_dec B_dec l0 a b} + {forall b : B, ~assoc 
 | nil => inright {b : B | assoc A_dec B_dec nil a b} (fun b : B => assoc_nil)
 | (x, y) :: ls =>
   match A_dec x a with
-  | left eq => _
+  | left eq => inleft
+    (forall b : B, ~ assoc A_dec B_dec ((x, y) :: ls) a b)
+    (exist (fun b : B => assoc A_dec B_dec ((x, y) :: ls) a b) y _)
   | right neq => match lookup A B A_dec B_dec ls a with
     | inleft result => inleft
       (forall b : B, ~ assoc A_dec B_dec ((x, y) :: ls) a b)
@@ -158,8 +160,6 @@ match l as l0 return {b : B | assoc A_dec B_dec l0 a b} + {forall b : B, ~assoc 
   end
 end.
 
-apply inleft.
-exists y.
 unfold assoc.
 destruct (A_dec x a).
 destruct (B_dec y y).
@@ -168,6 +168,7 @@ elim n.
 reflexivity.
 elim n.
 exact eq.
+Show Proof.
 Defined.
 
 Inductive has_type (g : context) : term -> type -> Prop :=
@@ -347,6 +348,6 @@ Definition type_check_simple (g : context) (T : term)
  end.
 
 Definition nat_type := var_type "Nat".
-Definition gamma := cons ("x", nat_type) (cons ("n", nat_type) nil).
+Definition gamma := cons ("n", nat_type) nil.
 
 Compute type_check_simple gamma (app_term (abs_term ("x", nat_type) (var_term "n")) (var_term "n")).
