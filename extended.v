@@ -31,149 +31,98 @@ Inductive term : Set :=
 
 Definition context := list (var * type).
 
-Fixpoint assoc {A B : Set}
-  (A_dec : forall x y : A, {x = y} + {x <> y})
-  (B_dec : forall x y : B, {x = y} + {x <> y})
-  (l : list (A * B)) 
-  (a : A)
-  (b : B)
-  {struct l}
-  : Prop :=
-match l with
-| nil => False
-| (x, y) :: ls =>
-  match A_dec x a with
-  | right _ => assoc A_dec B_dec ls a b
-  | left _ =>
-    match B_dec b y with
-    | left _ => True
-    | right _ => False
-    end
-  end
-end.
-
-Lemma sig_assoc_cons {A B : Set}
-  {A_dec : forall x y : A, {x = y} + {x <> y}}
-  {B_dec : forall x y : B, {x = y} + {x <> y}}
-  (x : A) (y : B)
-  (ls : list (A * B))
-  (a : A)
-  (bSig : {b : B | assoc A_dec B_dec ls a b})
-  (neq : x <> a)
-  : {b : B | assoc A_dec B_dec ((x, y) :: ls) a b}.
-Proof.
-destruct bSig as (b, Hb).
-exists b.
-unfold assoc.
-destruct (A_dec x a).
-elim neq.
-exact e.
-exact Hb.
-Defined.
-
-Lemma neg_assoc_cons {A B : Set} {a : A} {b : B}
-  {A_dec : forall x y : A, {x = y} + {x <> y}}
-  {B_dec : forall x y : B, {x = y} + {x <> y}}
-  (x : A) (y : B)
-  (ls : list (A * B))
-  (np : ~assoc A_dec B_dec ls a b)
-  (neq : x <> a)
-  : ~assoc A_dec B_dec ((x, y) :: ls) a b.
-Proof.
-intro q.
-unfold assoc in np.
-unfold assoc in q.
-destruct (A_dec x a) as [eq | ?].
-elim neq.
-exact eq.
-
-elim np.
-exact q.
-Defined.
-
-Lemma assoc_nil {A B : Set} {a : A} {b : B}
-  {A_dec : forall x y : A, {x = y} + {x <> y}}
-  {B_dec : forall x y : B, {x = y} + {x <> y}}
-: ~assoc A_dec B_dec nil a b.
-Proof.
-unfold assoc.
-intro.
-contradiction.
-Defined.
+Inductive assoc {A B : Set} (a : A) (b : B) : list (A * B) -> Prop :=
+  | assoc_base l : assoc a b ((a, b) :: l)
+  | assoc_step a' b' l : a <> a' -> assoc a b l -> assoc a b ((a', b') :: l).
 
 Lemma assoc_B_unique {A B : Set} {l : list (A * B)} {a : A} {b1 b2 : B}
-  {A_dec : forall x y : A, {x = y} + {x <> y}}
-  {B_dec : forall x y : B, {x = y} + {x <> y}}
-  (P1 : assoc A_dec B_dec l a b1)
-  (P2 : assoc A_dec B_dec l a b2)
+  (P1 : assoc a b1 l)
+  (P2 : assoc a b2 l)
   : b1 = b2.
 Proof.
 
 induction l.
 
-unfold assoc in *.
-contradiction.
+(* l = nil *)
+inversion_clear P1.
 
-destruct a0 as (x, y).
+(* l = (a0 :: l) *)
+inversion P1.
+  (* P1 is an assoc_base *)
+  inversion P2.
+    (* P2 is an assoc_base *)
+    rewrite <- H2 in H0.
+    inversion_clear H0.
+    reflexivity.
 
-unfold assoc in P1.
-unfold assoc in P2.
-destruct (A_dec x a).
-destruct (B_dec b1 y).
-destruct (B_dec b2 y).
+    (* P2 is an assoc_step, which is impossible *)
+    elim H3.
+    rewrite <- H0 in H.
+    inversion_clear H.
+    reflexivity.
 
-rewrite e0.
-rewrite e1.
-reflexivity.
+  (* P2 is an assoc_step *)
+  inversion P2.
+    (* P2 is an assoc_base, which is impossible *)
+    elim H1.
+    rewrite <- H4 in H.
+    inversion_clear H.
+    reflexivity.
 
-contradiction.
-contradiction.
+    (* P2 is an assoc_step, thus use induction step *)
+    apply IHl.
+      exact H2.
+      
+      exact H6.
+Defined.
 
-apply IHl.
-exact P1.
-exact P2.
+Lemma assoc_nil {A B : Set} {a : A} {b : B}
+: ~assoc a b nil.
+Proof.
+intro.
+inversion_clear H.
+Defined.
+
+Lemma neg_assoc_cons {A B : Set} {a : A} {b : B}
+  (x : A) (y : B)
+  (ls : list (A * B))
+  (np : ~assoc a b ls)
+  (neq : x <> a)
+  : ~assoc a b ((x, y) :: ls).
+Proof.
+intro ps.
+inversion ps as [? eq | ? ? ? ? p].
+elim neq.
+symmetry.
+exact eq.
+
+elim np.
+exact p.
 Defined.
 
 Fixpoint lookup {A B : Set}
   (A_dec : forall x y : A, {x = y} + {x <> y})
-  (B_dec : forall x y : B, {x = y} + {x <> y})
   (l : list (A * B)) (a : A)
   {struct l}
-  : {b : B | assoc A_dec B_dec l a b} + {forall b : B, ~assoc A_dec B_dec l a b}.
+  : {b : B | assoc a b l} + {forall b : B, ~assoc a b l}.
 Proof.
 refine
-match l as l0 return {b : B | assoc A_dec B_dec l0 a b} + {forall b : B, ~assoc A_dec B_dec l0 a b} with
-| nil => inright {b : B | assoc A_dec B_dec nil a b} (fun b : B => assoc_nil)
+match l as l0 return {b | assoc a b l0} + {forall b, ~assoc a b l0} with
+| nil => inright _ (fun b => assoc_nil)
 | (x, y) :: ls =>
   match A_dec x a with
-  | left eq => inleft
-    (forall b : B, ~ assoc A_dec B_dec ((x, y) :: ls) a b)
-    (exist (fun b : B => assoc A_dec B_dec ((x, y) :: ls) a b) y _)
-  | right neq => match lookup A B A_dec B_dec ls a with
-    | inleft result => inleft
-      (forall b : B, ~ assoc A_dec B_dec ((x, y) :: ls) a b)
-      (sig_assoc_cons x y ls a result neq)
-    | inright result => inright
-      {b : B | assoc A_dec B_dec ((x, y) :: ls) a b}
-      (fun b : B => neg_assoc_cons x y ls (result b) neq)
+  | left eq => inleft _ (exist _ y (eq_ind x (fun x' => assoc x' y ((x, y) :: ls)) (assoc_base x y ls) a eq))
+  | right neq => match lookup A B A_dec ls a with
+    | inleft (exist b Hb) => inleft _ (exist _ b (assoc_step a b x y ls (fun eq => False_ind False (neq (eq_sym eq))) Hb))
+    | inright result => inright _ (fun b => neg_assoc_cons x y ls (fun p' => match result b p' return False with end) neq)
     end
   end
 end.
-
-unfold assoc.
-destruct (A_dec x a).
-destruct (B_dec y y).
-exact I.
-elim n.
-reflexivity.
-elim n.
-exact eq.
-Show Proof.
 Defined.
 
 Inductive has_type (g : context) : term -> type -> Prop :=
 | var_has_type : forall v : var, forall A : type,
-  assoc var_dec type_dec g v A -> has_type g (var_term v) A
+  assoc v A g -> has_type g (var_term v) A
 | abs_has_type : forall v : var, forall M : term, forall A B : type,
   has_type ((v, A) :: g) M B -> has_type g (abs_term (v, A) M) (fun_type A B)
 | app_has_type : forall M N : term, forall A B : type,
@@ -224,7 +173,7 @@ apply (term_has_unique_type T P Q).
 Defined.
 
 Lemma type_check_var_lookup_failure {g : context} {v : var}
-  (NP : forall A : type, ~ assoc var_dec type_dec g v A)
+  (NP : forall A : type, ~ assoc v A g)
   : forall A : type, ~ has_type g (var_term v) A.
 Proof.
 intro A.
@@ -298,7 +247,7 @@ Fixpoint type_check (g : context) (T : term) {struct T}
  : {A : type | has_type g T A} + {forall A : type, ~has_type g T A} :=
  match T as T0 return {A : type | has_type g T0 A} + {forall A : type, ~has_type g T0 A} with
  | var_term v =>
-   match lookup var_dec type_dec g v with
+   match lookup var_dec g v with
    | inleft (exist A P) => inleft _
      (exist 
        (fun A : type => has_type g (var_term v) A)
