@@ -15,8 +15,7 @@ Definition var_dec := string_dec.
 
 Inductive type : Set :=
 | var_type : var -> type
-| fun_type : type -> type -> type
-.
+| fun_type : type -> type -> type.
 
 Definition type_dec : forall A B : type, {A = B} + {A <> B}.
 decide equality.
@@ -26,61 +25,58 @@ Defined.
 Inductive term : Set :=
 | var_term : var -> term
 | abs_term : (var * type) -> term -> term
-| app_term : term -> term -> term
-.
+| app_term : term -> term -> term.
 
 Definition context := list (var * type).
 
 Inductive assoc {A B : Set} (a : A) (b : B) : list (A * B) -> Prop :=
-  | assoc_base l : assoc a b ((a, b) :: l)
-  | assoc_step a' b' l : a <> a' -> assoc a b l -> assoc a b ((a', b') :: l).
+| assoc_base l : assoc a b ((a, b) :: l)
+| assoc_step a' b' l : a <> a' -> assoc a b l -> assoc a b ((a', b') :: l).
 
 Lemma assoc_B_unique {A B : Set} {l : list (A * B)} {a : A} {b1 b2 : B}
   (P1 : assoc a b1 l)
   (P2 : assoc a b2 l)
   : b1 = b2.
 Proof.
-
 induction l.
 
 (* l = nil *)
 inversion_clear P1.
 
 (* l = (a0 :: l) *)
-inversion P1.
+inversion P1 as [l' [eq_a_b1 eq_l'] | a' b' l' neq_a_a' P1' [eq_a'_b' eq_l'_l]].
   (* P1 is an assoc_base *)
-  inversion P2.
+  inversion P2 as [l'' [eq_a_b2 eq_ll'] | a' b' l'' neq_a_a' P2' [eq_a'_b' eq_l''_l]].
     (* P2 is an assoc_base *)
-    rewrite <- H2 in H0.
-    inversion_clear H0.
+    rewrite <- eq_a_b2 in eq_a_b1.
+    inversion_clear eq_a_b1.
     reflexivity.
 
     (* P2 is an assoc_step, which is impossible *)
-    elim H3.
-    rewrite <- H0 in H.
-    inversion_clear H.
+    elim neq_a_a'.
+    rewrite <- eq_a'_b' in eq_a_b1.
+    inversion_clear eq_a_b1.
     reflexivity.
 
   (* P2 is an assoc_step *)
-  inversion P2.
+  inversion P2 as [l'' [eq_a_b2 eq_l''] | a'' b'' l'' neq_a'_a'' P2' [eq_a''_b'' eq_l''_l]].
     (* P2 is an assoc_base, which is impossible *)
-    elim H1.
-    rewrite <- H4 in H.
-    inversion_clear H.
+    elim neq_a_a'.
+    rewrite <- eq_a'_b' in eq_a_b2.
+    inversion_clear eq_a_b2.
     reflexivity.
 
     (* P2 is an assoc_step, thus use induction step *)
     apply IHl.
-      exact H2.
-      
-      exact H6.
+      exact P1'.
+      exact P2'.
 Defined.
 
 Lemma assoc_nil {A B : Set} {a : A} {b : B}
 : ~assoc a b nil.
 Proof.
-intro.
-inversion_clear H.
+intro P.
+inversion_clear P.
 Defined.
 
 Lemma neg_assoc_cons {A B : Set} {a : A} {b : B}
@@ -92,33 +88,30 @@ Lemma neg_assoc_cons {A B : Set} {a : A} {b : B}
 Proof.
 intro ps.
 inversion ps as [? eq | ? ? ? ? p].
-elim neq.
-symmetry.
-exact eq.
+  elim neq.
+  symmetry.
+  exact eq.
 
-elim np.
-exact p.
+  elim np.
+  exact p.
 Defined.
 
 Fixpoint lookup {A B : Set}
   (A_dec : forall x y : A, {x = y} + {x <> y})
   (l : list (A * B)) (a : A)
   {struct l}
-  : {b : B | assoc a b l} + {forall b : B, ~assoc a b l}.
-Proof.
-refine
+  : {b : B | assoc a b l} + {forall b : B, ~assoc a b l} :=
 match l as l0 return {b | assoc a b l0} + {forall b, ~assoc a b l0} with
 | nil => inright _ (fun b => assoc_nil)
 | (x, y) :: ls =>
   match A_dec x a with
   | left eq => inleft _ (exist _ y (eq_ind x (fun x' => assoc x' y ((x, y) :: ls)) (assoc_base x y ls) a eq))
-  | right neq => match lookup A B A_dec ls a with
+  | right neq => match lookup A_dec ls a with
     | inleft (exist b Hb) => inleft _ (exist _ b (assoc_step a b x y ls (fun eq => False_ind False (neq (eq_sym eq))) Hb))
     | inright result => inright _ (fun b => neg_assoc_cons x y ls (fun p' => match result b p' return False with end) neq)
     end
   end
 end.
-Defined.
 
 Inductive has_type (g : context) : term -> type -> Prop :=
 | var_has_type : forall v : var, forall A : type,
@@ -126,8 +119,7 @@ Inductive has_type (g : context) : term -> type -> Prop :=
 | abs_has_type : forall v : var, forall M : term, forall A B : type,
   has_type ((v, A) :: g) M B -> has_type g (abs_term (v, A) M) (fun_type A B)
 | app_has_type : forall M N : term, forall A B : type,
-  has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B
-.
+  has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B.
 
 Fixpoint term_has_unique_type {g : context} {A B : type}
   (T : term)
@@ -244,57 +236,46 @@ exact HM.
 Defined.
 
 Fixpoint type_check (g : context) (T : term) {struct T}
- : {A : type | has_type g T A} + {forall A : type, ~has_type g T A} :=
- match T as T0 return {A : type | has_type g T0 A} + {forall A : type, ~has_type g T0 A} with
- | var_term v =>
-   match lookup var_dec g v with
-   | inleft (exist A P) => inleft _
-     (exist 
-       (fun A : type => has_type g (var_term v) A)
-       A
-       (var_has_type g v A P))
-   | inright NP => inright _ (type_check_var_lookup_failure NP)
-   end
- | abs_term (v, A) M =>
-   match type_check ((v, A) :: g) M with
-   | inleft (exist B HB) => inleft _
-     (exist
-       (fun B : type => has_type g (abs_term (v, A) M) B)
-       (fun_type A B)
-       (abs_has_type g v M A B HB))
-   | inright NP => inright _ (type_check_abs_failure NP)
-   end
- | app_term M N =>
-   match type_check g M with
-   | inleft (exist C HM as Msig) =>
-     match type_check g N with
-     | inleft (exist A HN as Nsig) =>
-       match C as C0 return (has_type g M C0 -> {C : type | has_type g (app_term M N) C} + {forall C : type, ~has_type g (app_term M N) C}) with
-       | var_type v => fun HM : has_type g M (var_type v) => inright _ (type_check_app_failure_var HM)
-       | fun_type CA CB => fun HM' : has_type g M (fun_type CA CB) =>
-         match type_dec CA A with
-         | left eq => inleft _
-           (exist
-             (fun CB : type => has_type g (app_term M N) CB)
-             CB
-             (app_has_type g M N CA CB HM'
-               (eq_ind_r (fun CA : type => has_type g N CA) HN eq)
-             ))
-         | right neq => inright _ (type_check_app_failure_eq HN HM' neq)
-         end
-       end HM
-     | inright NHN => inright _ (type_check_app_failure_N NHN)
-     end
-   | inright NHM => inright _ (type_check_app_failure_M NHM)
-   end
- end.
+: {A : type | has_type g T A} + {forall A : type, ~has_type g T A} :=
+match T as T0 return {A : type | has_type g T0 A} + {forall A : type, ~has_type g T0 A} with
+| var_term v =>
+  match lookup var_dec g v with
+  | inleft (exist A P) => inleft _ (exist _ _ (var_has_type g v A P))
+  | inright NP => inright _ (type_check_var_lookup_failure NP)
+  end
+| abs_term (v, A) M =>
+  match type_check ((v, A) :: g) M with
+  | inleft (exist B HB) => inleft _ (exist _ _ (abs_has_type g v M A B HB))
+  | inright NP => inright _ (type_check_abs_failure NP)
+  end
+| app_term M N =>
+  match type_check g M with
+  | inleft (exist C HM as Msig) =>
+    match type_check g N with
+    | inleft (exist A HN as Nsig) =>
+      match C as C0 return (has_type g M C0 -> {C : type | has_type g (app_term M N) C} + {forall C : type, ~has_type g (app_term M N) C}) with
+      | var_type v => fun HM : has_type g M (var_type v) => inright _ (type_check_app_failure_var HM)
+      | fun_type CA CB => fun HM' : has_type g M (fun_type CA CB) =>
+        match type_dec CA A with
+        | left eq => inleft _
+          (exist _ _
+            (app_has_type g M N CA CB HM'
+              (eq_ind_r _ HN eq)
+            ))
+        | right neq => inright _ (type_check_app_failure_eq HN HM' neq)
+        end
+      end HM
+    | inright NHN => inright _ (type_check_app_failure_N NHN)
+    end
+  | inright NHM => inright _ (type_check_app_failure_M NHM)
+  end
+end.
 
-Definition type_check_simple (g : context) (T : term)
- : option type :=
- match type_check g T with
- | inleft (exist x _) => Some x
- | inright _ => None
- end.
+Definition type_check_simple (g : context) (T : term) : option type :=
+match type_check g T with
+| inleft (exist x _) => Some x
+| inright _ => None
+end.
 
 Definition nat_type := var_type "Nat".
 Definition gamma := cons ("n", nat_type) nil.
