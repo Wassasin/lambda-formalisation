@@ -79,21 +79,30 @@ intro P.
 inversion_clear P.
 Defined.
 
-Lemma neg_assoc_cons {A B : Set} {a : A} {b : B}
-  (x : A) (y : B)
-  (ls : list (A * B))
-  (np : ~assoc a b ls)
+Lemma assoc_cons {A B : Set} {a : A} {b : B} {x : A} {y : B} {ls : list (A * B)}
+  (Ps : assoc a b ((x, y) :: ls))
   (neq : x <> a)
-  : ~assoc a b ((x, y) :: ls).
+  : assoc a b ls.
 Proof.
-intro ps.
-inversion ps as [? eq | ? ? ? ? p].
+inversion Ps as [? eq | ? ? ? ? P].
+  (* Ps is an assoc_base, which is not true because neq *)
   elim neq.
   symmetry.
   exact eq.
 
-  elim np.
-  exact p.
+  (* Ps is an assoc_step *)
+  exact P.
+Defined.
+
+Lemma neg_assoc_cons {A B : Set} {a : A} {b : B} {x : A} {y : B} {ls : list (A * B)}
+  (nP : ~assoc a b ls)
+  (neq : x <> a)
+  : ~assoc a b ((x, y) :: ls).
+Proof.
+intro Ps.
+elim nP.
+apply (assoc_cons Ps).
+exact neq.
 Defined.
 
 Fixpoint lookup {A B : Set}
@@ -108,7 +117,7 @@ match l as l0 return {b | assoc a b l0} + {forall b, ~assoc a b l0} with
   | left eq => inleft _ (exist _ y (eq_ind x (fun x' => assoc x' y ((x, y) :: ls)) (assoc_base x y ls) a eq))
   | right neq => match lookup A_dec ls a with
     | inleft (exist b Hb) => inleft _ (exist _ b (assoc_step a b x y ls (fun eq => False_ind False (neq (eq_sym eq))) Hb))
-    | inright result => inright _ (fun b => neg_assoc_cons x y ls (fun p' => match result b p' return False with end) neq)
+    | inright result => inright _ (fun b => neg_assoc_cons (fun p' => match result b p' return False with end) neq)
     end
   end
 end.
