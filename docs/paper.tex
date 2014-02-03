@@ -22,8 +22,11 @@
 \usepackage{xspace}
 \usepackage{url}
 
+\usepackage{color}
 \usepackage{listings}
 \usepackage{prettylistings}
+\usepackage{lstlangcoq}
+\lstset{language=Coq}
 
 \makeatletter
 \providecommand*{\twoheadrightarrowfill@}{%
@@ -47,65 +50,68 @@
 
 	I wrote a type checker for $\lambda^\rightarrow$ in Coq:
 
-	\begin{lstlisting}
-	Fixpoint type_check (g : context) (T : term) {struct T}
-	: {A : type | has_type g T A} + {forall A : type, ~has_type g T A}
-	\end{lstlisting}
+\begin{lstlisting}
+Fixpoint type_check (g : context) (T : term) {struct T}
+: {A : type | has_type g T A} + {forall A : type, ~has_type g T A}
+\end{lstlisting}
 
-	Meaning that aside from checking whether a term has a given type, also prove that otherwise the term has no applicable type.
-	Compared to only checking the first property, this required an additional ~200 lines of proof.
+	Aside from checking whether a term has a given type, I also prove that otherwise the term has no applicable type.
+	Checking for the second property required an additional ~200 lines of proof.
 
 	\section{Definitions}
 
 	Variables are strings.
-	\begin{lstlisting}
-	Definition var := string.
-	\end{lstlisting}
+	For this I import ``String'', and open the local scope ``string\_scope''.
+\begin{lstlisting}
+Definition var := string.
+\end{lstlisting}
 
-	Types are as expected:
+	Types are as expected for a $\lambda^\rightarrow$ type checker:
 	\[\mathbf{Type} := \mathbf{Var} ~|~ \mathbf{Type} \rightarrow \mathbf{Type}\]
-	\begin{lstlisting}
-	Inductive type : Set :=
-	| var_type : var -> type
-	| fun_type : type -> type -> type.
-	\end{lstlisting}
+\begin{lstlisting}
+Inductive type : Set :=
+| var_type : var -> type
+| fun_type : type -> type -> type.
+\end{lstlisting}
 
-	For terms we re-use the variables.
-	I could've also chosen to use a different domain for term-variables.
-	Might have been nicer.
+	For terms the variables are re-used.
+	I could've also chosen to use a different domain for term-variables, which I think would've been nicer.
+	As currently variables are implemented as strings, this would've yielded the same lower level implementation.
 	\[\mathbf{Term} := \mathbf{Var} ~|~ \lambda \mathbf{Var} : \mathbf{Type} . \mathbf{Term} ~|~ \mathbf{Term}~\mathbf{Term}\]
+\begin{lstlisting}
+Inductive term : Set :=
+| var_term : var -> term
+| abs_term : (var * type) -> term -> term
+| app_term : term -> term -> term.
+\end{lstlisting}
 
-	\begin{lstlisting}
-	Inductive term : Set :=
-	| var_term : var -> term
-	| abs_term : (var * type) -> term -> term
-	| app_term : term -> term -> term.
-	\end{lstlisting}
-
-	Are type context is a list of pairs of variables and types.
-	\begin{lstlisting}
-	Definition context := list (var * type).
-	\end{lstlisting}
+	My type context is a list of pairs of variables and types.
+	For this I use the ``List''-environment.
+\begin{lstlisting}
+Definition context := list (var * type).
+\end{lstlisting}
 
 	Central to the context, is the existential proof whether or not a variable is contained within the context.
-	For this we use the inductive predicate \emph{assoc}.
-	\begin{lstlisting}
-	Inductive assoc {A B : Set} (a : A) (b : B) : list (A * B) -> Prop :=
-	| assoc_base l : assoc a b ((a, b) :: l)
-	| assoc_step a0 b0 l : a <> a0 -> assoc a b l -> assoc a b ((a0, b0) :: l).
-	\end{lstlisting}
+	For this we use the inductive predicate \lstinline{assoc}.
+\begin{lstlisting}
+Inductive assoc {A B : Set} (a : A) (b : B) : list (A * B) -> Prop :=
+| assoc_base l : assoc a b ((a, b) :: l)
+| assoc_step a0 b0 l : a <> a0 -> assoc a b l -> assoc a b ((a0, b0) :: l).
+\end{lstlisting}
+	Specifically note the mutual-exclusivity between \lstinline{assoc_base} and \lstinline{assoc_step}, by use of the not-equals clause \lstinline{a <> a0}.
+	I wanted this predicate to be generic for any kind of context, thus it is defined for any \lstinline{A B : Set}.
 
-	Finally, the core of our type checker, is the proof that a term has a specific type.
-	For this we use the inductive predicate \emph{has\_type}.
-	\begin{lstlisting}
-	Inductive has_type (g : context) : term -> type -> Prop :=
-	| var_has_type : forall v : var, forall A : type,
-	  assoc v A g -> has_type g (var_term v) A
-	| abs_has_type : forall v : var, forall M : term, forall A B : type,
-	  has_type ((v, A) :: g) M B -> has_type g (abs_term (v, A) M) (fun_type A B)
-	| app_has_type : forall M N : term, forall A B : type,
-	  has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B.
-	\end{lstlisting}
+	Finally, the core of our type checker, is the function which yields either a proof that a term has a specific type, or a proof that a term can not have a type.
+	This proof is expressed using the inductive predicate \lstinline{has_type}.
+\begin{lstlisting}
+Inductive has_type (g : context) : term -> type -> Prop :=
+| var_has_type : forall v : var, forall A : type,
+  assoc v A g -> has_type g (var_term v) A
+| abs_has_type : forall v : var, forall M : term, forall A B : type,
+  has_type ((v, A) :: g) M B -> has_type g (abs_term (v, A) M) (fun_type A B)
+| app_has_type : forall M N : term, forall A B : type,
+  has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B.
+\end{lstlisting}
 
 	\section{Structure of proof}
 	
@@ -114,14 +120,231 @@
 		\caption{Lemma-wise dependency graph of proof, revealing structure.}
 	\end{figure}
 	
-	General scheme for implementing: when refining, if require inversion, put that part in a lemma.
-	As this typically was required when proving anything about the failure-cases, I had to implement lemma's for each of these.
-	Note that if I would've sticked to the original assignment, these lemma's would have been superfluous, and could've been replaced by "return Nothing" or similar.
+	Generally, when implementing a function, as soon as I was required to use the Inversion-tactic, I put that part in a separate lemma.
+	As this typically was required when proving anything about the failure-cases for \lstinline{type_check}, I had to implement lemma's for each of these.
+	Note that if I would've sticked to the original assignment, these failure-lemma's would have been superfluous, and could've been replaced by "return Nothing" or similar.
 
+	\subsection{Decidability}
+	
+		I undoubtedly would need decidability for types and variables.
+		I derived this from string decidability.
+\begin{lstlisting}
+Definition var_dec := string_dec.
+
+Definition type_dec : forall A B : type, {A = B} + {A <> B}.
+decide equality.
+apply var_dec.
+Defined.
+\end{lstlisting}
+
+	\subsection{\lstinline{lookup}}
+		
+		Firstly started implementing lookup.
+		Note that because \lstinline{assoc} initially was not an inductive predicate, I re-implemented this function multiple times.
+\begin{lstlisting}
+Fixpoint lookup {A B : Set}
+  (A_dec : forall x y : A, {x = y} + {x <> y})
+  (l : list (A * B)) (a : A)
+  {struct l}
+  : {b : B | assoc a b l} + {forall b : B, ~assoc a b l} :=
+match l as l0 return {b | assoc a b l0} + {forall b, ~assoc a b l0} with
+| nil => inright _ (fun b => assoc_nil)
+| (x, y) :: ls =>
+  match A_dec x a with
+  | left eq => inleft _ (exist _ y (eq_ind x (fun x0 => assoc x0 y ((x, y) :: ls)) (assoc_base x y ls) a eq))
+  | right neq => match lookup A_dec ls a with
+    | inleft (exist b Hb) => inleft _ (exist _ b (assoc_step a b x y ls (fun eq => False_ind False (neq (eq_sym eq))) Hb))
+    | inright result => inright _ (fun b => neg_assoc_cons (fun p => match result b p return False with end) neq)
+    end
+  end
+end.
+\end{lstlisting}
+		This function returns for a list of key-value-pairs the value for a given key, if it is included in the list.
+		Thus we require decidability on keys (\lstinline{A_dec}).
+		
+		The general structure for this function is as follows:
+		\begin{enumerate}
+			\item If the list is empty, use \lstinline{assoc_nil}.
+			\item If the list is not empty, decide whether the first element of the list is the one we're looking for:
+				\begin{enumerate}
+					\item If the first key equals the key we're looking for, return the value as \lstinline{assoc_base}.
+					\item If not, try the recursive case.
+						\begin{enumerate}
+							\item If the recursive case eventually finds the pair we're looking for, return the value as \lstinline{assoc_step}.
+							\item If not, rewrite the negative recursive result with \lstinline{neg_assoc_cons}.
+						\end{enumerate}
+				\end{enumerate}
+		\end{enumerate}
+	
+		\subsubsection{\lstinline{assoc_nil}}
+	
+		Straightforward; the empty list does not contain any key.		
+\begin{lstlisting}
+Lemma assoc_nil {A B : Set} {a : A} {b : B}
+: ~assoc a b nil.
+\end{lstlisting}
+
+		\subsubsection{\lstinline{assoc_cons}}
+		
+		If the head of the list does not include the desired key, it is contained in the tail of the list.
+\begin{lstlisting}
+Lemma assoc_cons {A B : Set} {a : A} {b : B} {x : A} {y : B} {ls : list (A * B)}
+  (Ps : assoc a b ((x, y) :: ls))
+  (neq : x <> a)
+  : assoc a b ls.
+\end{lstlisting}
+
+		\subsubsection{\lstinline{neg_assoc_cons}}
+
+		If the desired key is not included in both the head and the tail of a list, then it is not included in the entire list.
+\begin{lstlisting}
+Lemma neg_assoc_cons {A B : Set} {a : A} {b : B} {x : A} {y : B} {ls : list (A * B)}
+  (nP : ~assoc a b ls)
+  (neq : x <> a)
+  : ~assoc a b ((x, y) :: ls).
+\end{lstlisting}
+
+	\subsection{\lstinline{type_check}}
+		
+		As explained earlier, I've decided to implement the core of the proof as a single function, only using lemma's for the relatively difficult failure-cases.
+		I've attempted to leave everything Coq can infer out of the proof.
+\begin{lstlisting}
+Fixpoint type_check (g : context) (T : term) {struct T}
+: {A : type | has_type g T A} + {forall A : type, ~has_type g T A} :=
+match T as T0 return {A : type | has_type g T0 A} + {forall A : type, ~has_type g T0 A} with
+| var_term v =>
+  match lookup var_dec g v with
+  | inleft (exist A P) => inleft _ (exist _ _ (var_has_type g v A P))
+  | inright NP => inright _ (type_check_var_lookup_failure NP)
+  end
+| abs_term (v, A) M =>
+  match type_check ((v, A) :: g) M with
+  | inleft (exist B HB) => inleft _ (exist _ _ (abs_has_type g v M A B HB))
+  | inright NP => inright _ (type_check_abs_failure NP)
+  end
+| app_term M N =>
+  match type_check g M with
+  | inleft (exist C HM as Msig) =>
+    match type_check g N with
+    | inleft (exist A HN as Nsig) =>
+      match C as C0 return (has_type g M C0 -> {C : type | has_type g (app_term M N) C} + {forall C : type, ~has_type g (app_term M N) C}) with
+      | var_type v => fun HM : has_type g M (var_type v) => inright _ (type_check_app_failure_var HM)
+      | fun_type CA CB => fun HM0 : has_type g M (fun_type CA CB) =>
+        match type_dec CA A with
+        | left eq => inleft _
+          (exist _ _
+            (app_has_type g M N CA CB HM0
+              (eq_ind_r _ HN eq)
+            ))
+        | right neq => inright _ (type_check_app_failure_eq HN HM0 neq)
+        end
+      end HM
+    | inright NHN => inright _ (type_check_app_failure_N NHN)
+    end
+  | inright NHM => inright _ (type_check_app_failure_M NHM)
+  end
+end.
+\end{lstlisting}
+
+	The function destructs over the structure of the term.
+	\begin{enumerate}
+		\item If it is a \lstinline{var_term} $v$, execute a \lstinline{lookup} on $v$.
+		\item If it is an \lstinline{abs_term} $\lambda v:A . M$, execute a recursive \lstinline{type_check} on $M$, with $v:A$ added to the context.
+		\item If it is an \lstinline{app_term} $M N$, execute a recursive \lstinline{type_check} on both $M$ and $N$.
+			Only accept the returned types if $M$ is a function from $A \rightarrow B$, and $N$ is of type $A$.
+	\end{enumerate}
+	
+	Generally, the lemma's returning proofs for failures take the current state of the proof, and infer failure for the term that has just been destructed.
+	We use the following set of lemma's:
+
+		\subsubsection{\lstinline{type_check_var_lookup_failure}}
+		
+		If variable $v$ does not have type $A$ in context $g$, then \lstinline{var_term v} does not have type $A$.
+\begin{lstlisting}
+Lemma type_check_var_lookup_failure {g : context} {v : var}
+  (NP : forall A : type, ~ assoc v A g)
+  : forall A : type, ~ has_type g (var_term v) A.
+\end{lstlisting}
+
+		\subsubsection{\lstinline{type_check_abs_failure}}
+		
+		If $M$ does not have a type in an extended context, then $\lambda v:A.M$ also does not have a type.
+\begin{lstlisting}
+Lemma type_check_abs_failure {g : context} {M : term} {v : var} {A : type}
+  (NP : forall B : type, ~ has_type ((v, A) :: g) M B)
+  : forall B : type, ~ has_type g (abs_term (v, A) M) B.
+\end{lstlisting}
+
+		\subsubsection{\lstinline{type_check_app_failure_var}}
+		
+		If $M$ has \lstinline{var_type v}, then it can never be the function in \lstinline{app_term M N}.
+\begin{lstlisting}
+Lemma type_check_app_failure_var {g : context} {M N : term} {v : var}
+  (P : has_type g M (var_type v))
+  : forall B : type, ~ has_type g (app_term M N) B.
+\end{lstlisting}
+
+	\subsubsection{\lstinline{type_check_app_failure_eq}}
+
+	If $M$ if a function $CA \rightarrow CB$ and $N$ a term with type $A$, and $CA \neq A$, then \lstinline{app_term M N} can not have a type.
+\begin{lstlisting}
+Lemma type_check_app_failure_eq {g : context} {M N : term} {A CA CB : type}
+  (HN : has_type g N A)
+  (HM : has_type g M (fun_type CA CB))
+  (neq : CA <> A)
+  : forall B : type, ~ has_type g (app_term M N) B.
+\end{lstlisting}
+
+	\subsubsection{\lstinline{type_check_app_failure_N}}
+
+	If $N$ does not have a type, then \lstinline{app_term M N} does neither.
+\begin{lstlisting}
+Lemma type_check_app_failure_N {g : context} {M N : term}
+  (NHN : forall A : type, ~ has_type g N A)
+  : forall B : type, ~ has_type g (app_term M N) B.
+\end{lstlisting}
+
+	\subsubsection{\lstinline{type_check_app_failure_M}}
+	
+	If $M$ does not have a type, then \lstinline{app_term M N} does neither.
+\begin{lstlisting}
+Lemma type_check_app_failure_M {g : context} {M N : term}
+  (NHM : forall A : type, ~ has_type g M A)
+  : forall A : type, ~ has_type g (app_term M N) A.
+\end{lstlisting}
+
+	\subsubsection{\lstinline{type_inconsistency}}
+	
+	For \lstinline{type_check_app_failure_var} we need \lstinline{type_inconsistency}.
+	It states that if we know that a term $T$ has types \lstinline{fun_type A B} and \lstinline{var_type v}, then we know that we've got an inconsistency.
+\begin{lstlisting}
+Lemma type_inconsistency {g : context} {T : term} {A B : type} {v : var}
+  (P : has_type g T (fun_type A B))
+  (Q : has_type g T (var_type v))
+  : False.
+\end{lstlisting}
+
+	\subsubsection{\lstinline{term_has_unique_type}}
+	
+	If we have two types for a term $T$, then these types must be equal.
+	This is used by \lstinline{type_inconsistency} and \lstinline{type_check_app_failure_eq}.
+\begin{lstlisting}
+Fixpoint term_has_unique_type {g : context} {A B : type}
+  (T : term)
+  (P : has_type g T A)
+  (Q : has_type g T B)
+  {struct T}
+  : A = B.
+\end{lstlisting}
+
+	
 	\section{Considerations}
 
-	Initially, I implemented \emph{assoc} and \emph{has\_type} as bare propositions, instead of inductive predicates.
+	Initially, I implemented \lstinline{assoc} and \lstinline{has_type} as bare propositions, instead of inductive predicates.
 	Later I saw that writing proofs for these predicates is easier.
 	Thus I rewrote the entire proof.
+	
+	When refining, I noticed that my Coq version pretty-prints the proofs not in a way that Coq can read these proofs themselves.
+	Thus I had to spend a lot of time attempting to make Coq accept these proofs as bare functions.
 
 \end{document}
