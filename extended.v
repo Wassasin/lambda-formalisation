@@ -3,13 +3,6 @@ Open Local Scope string_scope.
 
 Require Import List.
 
-Definition option_dec {A : Type}
-  (P : forall x y : A, {x = y} + {x <> y})
-  (x y : option A)
-  : {x = y} + {x <> y}.
-decide equality.
-Defined.
-
 Definition var := string.
 Definition var_dec := string_dec.
 
