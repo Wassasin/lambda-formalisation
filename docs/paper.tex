@@ -1,0 +1,127 @@
+\documentclass[a4paper, 10pt]{amsart}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[a4paper]{geometry}
+
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathrsfs}
+\usepackage{nicefrac}
+
+\usepackage{enumerate}
+\usepackage{hyperref}
+\usepackage{comment}
+\usepackage{float}
+\usepackage{parskip}
+
+\usepackage{xspace}
+\usepackage{url}
+
+\usepackage{listings}
+\usepackage{prettylistings}
+
+\makeatletter
+\providecommand*{\twoheadrightarrowfill@}{%
+  \arrowfill@\relbar\relbar\twoheadrightarrow
+}
+\providecommand*{\xtwoheadrightarrow}[2][]{%
+  \ext@arrow 0579\twoheadrightarrowfill@{#1}{#2}%
+}
+\makeatother
+
+\usepackage{prooftree}
+\newcommand{\notjustify}{\thickness0em\justifies}
+\usepackage[figuresleft]{rotating}
+
+\title{Type checking $\lambda^\rightarrow$ in Coq}
+\author{Wouter Geraedts}
+
+\begin{document}
+
+	\maketitle
+
+	I wrote a type checker for $\lambda^\rightarrow$ in Coq:
+
+	\begin{lstlisting}
+	Fixpoint type_check (g : context) (T : term) {struct T}
+	: {A : type | has_type g T A} + {forall A : type, ~has_type g T A}
+	\end{lstlisting}
+
+	Meaning that aside from checking whether a term has a given type, also prove that otherwise the term has no applicable type.
+	Compared to only checking the first property, this required an additional ~200 lines of proof.
+
+	\section{Definitions}
+
+	Variables are strings.
+	\begin{lstlisting}
+	Definition var := string.
+	\end{lstlisting}
+
+	Types are as expected:
+	\[\mathbf{Type} := \mathbf{Var} ~|~ \mathbf{Type} \rightarrow \mathbf{Type}\]
+	\begin{lstlisting}
+	Inductive type : Set :=
+	| var_type : var -> type
+	| fun_type : type -> type -> type.
+	\end{lstlisting}
+
+	For terms we re-use the variables.
+	I could've also chosen to use a different domain for term-variables.
+	Might have been nicer.
+	\[\mathbf{Term} := \mathbf{Var} ~|~ \lambda \mathbf{Var} : \mathbf{Type} . \mathbf{Term} ~|~ \mathbf{Term}~\mathbf{Term}\]
+
+	\begin{lstlisting}
+	Inductive term : Set :=
+	| var_term : var -> term
+	| abs_term : (var * type) -> term -> term
+	| app_term : term -> term -> term.
+	\end{lstlisting}
+
+	Are type context is a list of pairs of variables and types.
+	\begin{lstlisting}
+	Definition context := list (var * type).
+	\end{lstlisting}
+
+	Central to the context, is the existential proof whether or not a variable is contained within the context.
+	For this we use the inductive predicate \emph{assoc}.
+	\begin{lstlisting}
+	Inductive assoc {A B : Set} (a : A) (b : B) : list (A * B) -> Prop :=
+	| assoc_base l : assoc a b ((a, b) :: l)
+	| assoc_step a0 b0 l : a <> a0 -> assoc a b l -> assoc a b ((a0, b0) :: l).
+	\end{lstlisting}
+
+	Finally, the core of our type checker, is the proof that a term has a specific type.
+	For this we use the inductive predicate \emph{has\_type}.
+	\begin{lstlisting}
+	Inductive has_type (g : context) : term -> type -> Prop :=
+	| var_has_type : forall v : var, forall A : type,
+	  assoc v A g -> has_type g (var_term v) A
+	| abs_has_type : forall v : var, forall M : term, forall A B : type,
+	  has_type ((v, A) :: g) M B -> has_type g (abs_term (v, A) M) (fun_type A B)
+	| app_has_type : forall M N : term, forall A B : type,
+	  has_type g M (fun_type A B) -> has_type g N A -> has_type g (app_term M N) B.
+	\end{lstlisting}
+
+	\section{Structure of proof}
+	
+	\begin{figure}[H]
+		\includegraphics[width=\textwidth]{graph.pdf}
+		\caption{Lemma-wise dependency graph of proof, revealing structure.}
+	\end{figure}
+	
+	General scheme for implementing: when refining, if require inversion, put that part in a lemma.
+	As this typically was required when proving anything about the failure-cases, I had to implement lemma's for each of these.
+	Note that if I would've sticked to the original assignment, these lemma's would have been superfluous, and could've been replaced by "return Nothing" or similar.
+
+	\section{Considerations}
+
+	Initially, I implemented \emph{assoc} and \emph{has\_type} as bare propositions, instead of inductive predicates.
+	Later I saw that writing proofs for these predicates is easier.
+	Thus I rewrote the entire proof.
+
+\end{document}

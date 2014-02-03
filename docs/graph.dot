@@ -1,0 +1,85 @@
+digraph G {
+	rankdir = "LR";
+	
+	{
+		node [shape=none, style=invis, height=0, margin=0];
+		edge [style=invis, margin=0, arrowhead=none];
+		r5 -> r4 -> r3 -> r2 -> r1;
+	}
+	
+	node [shape=box, color=gray, style=filled];
+	
+	{
+		rank = "same";
+		r1;
+		
+		var_dec;
+		type_dec;
+	
+		assoc_B_unique;
+		assoc_nil;
+		assoc_cons;
+		
+	}
+	
+	{
+		rank = "same";
+		r2;
+		
+		neg_assoc_cons;
+		term_has_unique_type;
+	}
+	
+	{
+		rank = "same";
+		r3;
+	
+		lookup;
+		type_inconsistency;
+			
+	}
+	
+	{
+		rank = "same";
+		r4;
+	
+		type_check_var_lookup_failure;
+		type_check_abs_failure;
+		type_check_app_failure_var;
+			
+		type_check_app_failure_eq;
+			
+		type_check_app_failure_N;
+		type_check_app_failure_M;
+		
+	}
+	
+	{
+		rank = "same";
+		r5;
+		
+		type_check;
+	}
+	
+	neg_assoc_cons -> assoc_cons;
+	term_has_unique_type -> assoc_B_unique;
+	
+	lookup -> assoc_nil;
+	lookup -> neg_assoc_cons;
+	
+	type_inconsistency -> type_dec;
+	type_inconsistency -> term_has_unique_type;
+	
+	type_check_app_failure_var -> type_inconsistency;
+	type_check_app_failure_eq -> term_has_unique_type;
+	
+	type_check -> lookup;
+	type_check -> var_dec;
+	type_check -> type_check_var_lookup_failure;
+	type_check -> type_check_abs_failure;
+	type_check -> type_check_app_failure_var;
+	type_check -> type_dec;
+	type_check -> type_check_app_failure_eq;
+	type_check -> type_check_app_failure_N;
+	type_check -> type_check_app_failure_M;
+}
